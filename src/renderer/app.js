@@ -57,9 +57,8 @@ let tunnelDomain = '';
 let tunnelRunning = false;
 let feedToken = '';
 
-// Track which feed groups are collapsed (default: all collapsed)
-const groupCollapsed = {};
-let groupCollapseInitialized = false;
+// Active platform tab in feed list
+let activeGroup = null;
 
 // ── Init ────────────────────────────────────────────────────────────────
 
@@ -644,60 +643,45 @@ async function renderFeeds() {
     groups[category].push(feed);
   }
 
-  // Initialize collapse state for new groups (default collapsed)
-  if (!groupCollapseInitialized) {
-    for (const cat of Object.keys(groups)) {
-      if (!(cat in groupCollapsed)) groupCollapsed[cat] = true;
-    }
-    groupCollapseInitialized = true;
-  } else {
-    for (const cat of Object.keys(groups)) {
-      if (!(cat in groupCollapsed)) groupCollapsed[cat] = true;
-    }
-  }
-
   // Render in defined order, then any extras
   const orderedCategories = groupOrder.filter(c => groups[c]);
   for (const cat of Object.keys(groups)) {
     if (!orderedCategories.includes(cat)) orderedCategories.push(cat);
   }
 
+  if (!activeGroup || !orderedCategories.includes(activeGroup)) {
+    activeGroup = orderedCategories[0];
+  }
+
+  const tabs = document.createElement('div');
+  tabs.className = 'feed-tabs';
+
   for (const category of orderedCategories) {
-    const catFeeds = groups[category];
-    const isCollapsed = groupCollapsed[category] !== false;
-
-    // Group header
-    const header = document.createElement('div');
-    header.className = 'feed-group-header' + (isCollapsed ? ' collapsed' : '');
-
-    // Compute group's newest post date
-    const groupLatestTs = catFeeds.reduce((max, f) => {
-      if (!f.latestPostDate) return max;
-      const t = new Date(f.latestPostDate).getTime();
-      return t > max ? t : max;
-    }, 0);
-    const groupLatestStr = groupLatestTs ? formatTimeAgo(new Date(groupLatestTs).toISOString()) : 'never';
-
-    header.innerHTML = `
-      <span class="feed-group-chevron">${isCollapsed ? '▸' : '▾'}</span>
-      <span class="feed-group-label">${category}</span>
-      <span class="feed-group-count">${catFeeds.length}</span>
-      <span class="feed-group-latest">Latest post: ${groupLatestStr}</span>
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'feed-tab' + (category === activeGroup ? ' is-active' : '');
+    tab.innerHTML = `
+      <span class="feed-tab-label">${category}</span>
+      <span class="feed-group-count">${groups[category].length}</span>
     `;
-    header.addEventListener('click', () => {
-      groupCollapsed[category] = !groupCollapsed[category];
+    tab.addEventListener('click', () => {
+      activeGroup = category;
       renderFeeds();
     });
-    feedsList.appendChild(header);
-
-    if (isCollapsed) continue;
-
-    // Render feed cards in this group
-    for (const feed of catFeeds) {
-      const card = buildFeedCard(feed);
-      feedsList.appendChild(card);
-    }
+    tabs.appendChild(tab);
   }
+
+  feedsList.appendChild(tabs);
+
+  const activeFeedsGrid = document.createElement('div');
+  activeFeedsGrid.className = 'group-feeds-grid';
+
+  for (const feed of groups[activeGroup] || []) {
+    const card = buildFeedCard(feed);
+    activeFeedsGrid.appendChild(card);
+  }
+
+  feedsList.appendChild(activeFeedsGrid);
 }
 
 function buildFeedCard(feed) {
@@ -720,6 +704,9 @@ function buildFeedCard(feed) {
       card.classList.add('feed-stale');
     }
 
+    const customSourceUrl = feed.fullUrl || feed.url || '';
+    const customFavicon = getDomainFaviconUrl(customSourceUrl);
+    const customFallbackLogo = 'https://cdn-icons-png.flaticon.com/512/1006/1006771.png';
     const platformLogo = platform === 'twitter'
       ? 'https://abs.twimg.com/icons/apple-touch-icon-192x192.png'
       : platform === 'facebook'
@@ -729,8 +716,8 @@ function buildFeedCard(feed) {
           : platform === 'txt'
             ? 'https://cdn-icons-png.flaticon.com/512/337/337956.png'
             : platform === 'custom'
-              ? 'https://cdn-icons-png.flaticon.com/512/1006/1006771.png'
-              : 'https://www.instagram.com/static/images/ico/favicon-192.png/68d99ba29cc8.png';
+              ? (customFavicon || customFallbackLogo)
+              : 'https://cdn-icons-png.flaticon.com/512/2111/2111463.png';
     const isGroup = feed.username.startsWith('groups/');
     const isEvent = feed.username.startsWith('events/') || feed.username === 'events';
     const platformLabel = platform === 'twitter' ? 'Twitter' :
@@ -748,7 +735,7 @@ function buildFeedCard(feed) {
       <div class="feed-card-content">
         <div class="feed-card-header">
           <div class="feed-avatar">
-            <img src="${platformLogo}" alt="${platformLabel}" style="width:36px;height:36px;border-radius:8px;" onerror="this.style.display='none';this.nextElementSibling.style.display=''">
+            <img src="${platformLogo}" alt="${platformLabel}" data-fallback="${platform === 'custom' ? customFallbackLogo : ''}" style="width:36px;height:36px;border-radius:8px;" onerror="if(this.dataset.fallback && this.src !== this.dataset.fallback){this.src=this.dataset.fallback;return;}this.style.display='none';this.nextElementSibling.style.display=''">
             <span style="display:none">${feed.alias?.charAt(0)?.toUpperCase() || '@'}</span>
           </div>
           <div class="feed-info">
@@ -774,9 +761,37 @@ function buildFeedCard(feed) {
         </div>
       </div>
       <div class="feed-actions">
-        <button class="btn btn-outline btn-sm btn-rename" title="Rename">✏️</button>
-        <button class="btn btn-outline btn-sm btn-refresh" title="Refresh">🔄</button>
-        <button class="btn btn-outline btn-sm btn-remove" title="Remove">✕</button>
+        <button class="btn btn-outline btn-icon-action feed-action-btn btn-rename" title="Rename" aria-label="Rename feed">
+          <span class="btn-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9"/>
+              <path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+            </svg>
+          </span>
+        </button>
+        <button class="btn btn-outline btn-icon-action feed-action-btn btn-refresh" title="Refresh" aria-label="Refresh feed">
+          <span class="btn-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 2v6h-6"/>
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+              <path d="M3 22v-6h6"/>
+              <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+            </svg>
+          </span>
+          <span class="btn-spinner" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+            </svg>
+          </span>
+        </button>
+        <button class="btn btn-outline btn-icon-action feed-action-btn btn-remove" title="Remove" aria-label="Remove feed">
+          <span class="btn-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </span>
+        </button>
       </div>
     `;
 
@@ -822,8 +837,7 @@ function buildFeedCard(feed) {
 
     card.querySelector('.btn-refresh').addEventListener('click', async (e) => {
       const btn = e.currentTarget;
-      btn.disabled = true;
-      btn.textContent = '⏳';
+      setBtnLoading(btn, true);
       try {
         await window.api.refreshFeed(feed.username, platform);
         toast(`@${feed.username} refreshed!`, 'success');
@@ -831,8 +845,7 @@ function buildFeedCard(feed) {
       } catch (err) {
         toast(`Failed to refresh @${feed.username}`, 'error');
       } finally {
-        btn.disabled = false;
-        btn.textContent = '🔄';
+        setBtnLoading(btn, false);
         window.focus();
       }
     });
@@ -846,6 +859,18 @@ function buildFeedCard(feed) {
     });
 
     return card;
+}
+
+function getDomainFaviconUrl(rawUrl) {
+  if (!rawUrl) return null;
+  try {
+    const parsed = new URL(rawUrl);
+    const host = parsed.hostname;
+    if (!host) return null;
+    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`;
+  } catch {
+    return null;
+  }
 }
 
 function createEmptyState() {

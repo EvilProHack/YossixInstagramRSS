@@ -708,7 +708,7 @@ body {
 
 .feed-count-badge {
   background: rgba(255, 255, 255, 0.05);
-  color: var(--text-secondary);
+  color: #c6c6c6;
   border: 1px solid var(--border);
   min-width: 74px;
   justify-content: center;
@@ -723,15 +723,16 @@ body {
 }
 
 .feeds-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   padding-top: 4px;
 }
 
-/* Group headers span the full grid width */
-.feed-group-header {
-  grid-column: 1 / -1;
+.group-feeds-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
 }
 
 .empty-state {
@@ -750,59 +751,61 @@ body {
   font-size: 13px;
 }
 
-/* ── Feed Group Headers ───────────────────────────────────────────────── */
+/* ── Feed Tabs ────────────────────────────────────────────────────────── */
 
-.feed-group-header {
+.feed-tabs {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
-  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.feed-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
   cursor: pointer;
   border-radius: var(--radius-sm);
-  user-select: none;
-  transition: background 0.15s;
+  color: var(--text-secondary);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
-.feed-group-header:first-child {
-  margin-top: 0;
-}
-
-.feed-group-header:hover {
+.feed-tab:hover {
   background: var(--bg-hover);
+  border-color: var(--text-muted);
+  color: var(--text);
 }
 
-.feed-group-chevron {
-  font-size: 12px;
-  color: var(--text-muted);
-  width: 14px;
-  text-align: center;
-}
-
-.feed-group-label {
+.feed-tab-label {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .feed-group-count {
   font-size: 11px;
-  color: var(--text-muted);
-  background: var(--bg-card);
+  color: #d2d2d2;
+  background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 0 7px;
   line-height: 18px;
 }
 
-.feed-group-latest {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--text-muted);
-  font-weight: 400;
-  white-space: nowrap;
+.feed-tab.is-active {
+  background: rgba(225, 48, 108, 0.14);
+  border-color: rgba(225, 48, 108, 0.55);
+  color: #f3c2d3;
+}
+
+.feed-tab.is-active .feed-group-count {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #ececec;
 }
 
 /* ── Feed Card ────────────────────────────────────────────────────────── */
@@ -929,18 +932,17 @@ body {
 .feed-actions {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
   flex-shrink: 0;
   justify-content: flex-start;
 }
 
-.feed-actions .btn-remove {
-  margin-top: auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  text-align: center;
+.feed-action-btn {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border-radius: 7px;
 }
 
 .feed-actions .btn-remove:hover {
