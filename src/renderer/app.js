@@ -295,8 +295,10 @@ btnCopyOpml.addEventListener('click', exportOpml);
 btnBlurToggle.addEventListener('click', () => {
   urlsBlurred = !urlsBlurred;
   document.getElementById('app').classList.toggle('urls-blurred', urlsBlurred);
-  btnBlurToggle.textContent = urlsBlurred ? '🐵 Show URLs' : '🙈 Blur URLs';
-  btnBlurToggle.classList.toggle('btn-blur-active', urlsBlurred);
+  btnBlurToggle.classList.toggle('is-active', urlsBlurred);
+  btnBlurToggle.dataset.state = urlsBlurred ? 'on' : 'off';
+  btnBlurToggle.title = urlsBlurred ? 'Show URLs' : 'Blur URLs';
+  btnBlurToggle.setAttribute('aria-label', urlsBlurred ? 'Show URLs' : 'Blur URLs');
 });
 
 logoLink.addEventListener('click', (e) => {
@@ -861,7 +863,7 @@ function createEmptyState() {
 // ── Refresh All ─────────────────────────────────────────────────────────
 
 async function refreshAll() {
-  setBtnLoading(btnRefreshAll, true, '🔄 Refreshing…');
+  setBtnLoading(btnRefreshAll, true);
   try {
     const results = await window.api.refreshAll();
     const ok = results.filter((r) => r.success).length;
@@ -871,58 +873,77 @@ async function refreshAll() {
   } catch (err) {
     toast('Failed to refresh feeds', 'error');
   } finally {
-    setBtnLoading(btnRefreshAll, false, '🔄 Refresh All');
+    setBtnLoading(btnRefreshAll, false);
   }
 }
 
 // ── Export OPML ─────────────────────────────────────────────────────────
 
 async function exportOpml() {
-  const feeds = await window.api.getFeeds();
-  if (feeds.length === 0) {
-    toast('No feeds to export', 'error');
-    return;
-  }
+  setBtnLoading(btnCopyOpml, true);
+  try {
+    const feeds = await window.api.getFeeds();
+    if (feeds.length === 0) {
+      toast('No feeds to export', 'error');
+      return;
+    }
 
-  // Group feeds by platform
-  const groups = {};
-  for (const feed of feeds) {
-    const platform = feed.platform || 'instagram';
-    const category = platform === 'twitter' ? 'Twitter' :
-      platform === 'facebook' ? 'Facebook' :
-      platform === 'linkedin' ? 'LinkedIn' :
-      platform === 'txt' ? 'Text' :
-      platform === 'custom' ? 'Custom' : 'Instagram';
-    if (!groups[category]) groups[category] = [];
-    groups[category].push(feed);
-  }
+    // Group feeds by platform
+    const groups = {};
+    for (const feed of feeds) {
+      const platform = feed.platform || 'instagram';
+      const category = platform === 'twitter' ? 'Twitter' :
+        platform === 'facebook' ? 'Facebook' :
+        platform === 'linkedin' ? 'LinkedIn' :
+        platform === 'txt' ? 'Text' :
+        platform === 'custom' ? 'Custom' : 'Instagram';
+      if (!groups[category]) groups[category] = [];
+      groups[category].push(feed);
+    }
 
-  const result = await window.api.exportOpml(groups, tunnelDomain);
-  if (result.success) {
-    toast(`Exported ${result.fileCount} OPML file(s)`, 'success');
-  } else {
-    toast(result.error || 'Export failed', 'error');
+    const result = await window.api.exportOpml(groups, tunnelDomain);
+    if (result.success) {
+      toast(`Exported ${result.fileCount} OPML file(s)`, 'success');
+      pulseSuccess(btnCopyOpml);
+    } else {
+      toast(result.error || 'Export failed', 'error');
+    }
+  } finally {
+    setBtnLoading(btnCopyOpml, false);
   }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
 function setBtnLoading(btn, loading, loadingText) {
+  if (!btn) return;
+  btn.classList.toggle('is-busy', loading);
   if (loading) {
     btn.disabled = true;
-    if (loadingText) btn.textContent = loadingText;
+    if (loadingText) {
+      const text = btn.querySelector('.btn-text');
+      if (text) text.textContent = loadingText;
+    }
     const spinner = btn.querySelector('.btn-spinner');
     const text = btn.querySelector('.btn-text');
     if (spinner) spinner.style.display = '';
     if (text) text.style.display = 'none';
   } else {
     btn.disabled = false;
-    if (loadingText) btn.textContent = loadingText;
+    if (loadingText) {
+      const text = btn.querySelector('.btn-text');
+      if (text) text.textContent = loadingText;
+    }
     const spinner = btn.querySelector('.btn-spinner');
     const text = btn.querySelector('.btn-text');
     if (spinner) spinner.style.display = 'none';
     if (text) text.style.display = '';
   }
+}
+
+function pulseSuccess(btn) {
+  btn.classList.add('is-success');
+  setTimeout(() => btn.classList.remove('is-success'), 700);
 }
 
 function copyToClipboard(text) {

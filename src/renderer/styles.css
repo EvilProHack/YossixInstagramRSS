@@ -524,6 +524,7 @@ body {
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 8px 16px;
   border: none;
@@ -586,21 +587,96 @@ body {
   font-size: 12px;
 }
 
+.btn-icon-action {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  position: relative;
+}
+
+.btn-icon-action .btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.btn-icon-action .btn-spinner {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+}
+
+.btn-icon-action.is-busy .btn-icon {
+  opacity: 0;
+  transform: scale(0.8);
+}
+
+.btn-icon-action.is-busy .btn-spinner {
+  opacity: 1;
+}
+
+.btn-icon-action.is-busy .btn-spinner svg {
+  animation: spin 0.9s linear infinite;
+}
+
+.btn-icon-action.is-success {
+  border-color: rgba(74, 222, 128, 0.55);
+  color: var(--success);
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.15) inset;
+}
+
+.btn-icon-action .icon-eye-on {
+  position: absolute;
+  opacity: 0;
+  transform: scale(0.85);
+}
+
+.btn-icon-action.is-active .icon-eye-off {
+  opacity: 0;
+  transform: scale(0.85);
+}
+
+.btn-icon-action.is-active .icon-eye-on {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.btn-icon-action.is-active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
 /* ── Add Section ──────────────────────────────────────────────────────── */
 
 .add-section {
-  padding: 20px 24px 8px;
+  padding: 16px 24px 6px;
   position: relative;
   z-index: 10;
 }
 
 .add-form {
   display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.add-controls {
+  display: flex;
+  align-items: center;
   gap: 10px;
 }
 
 .add-form input {
   flex: 1;
+  height: 42px;
   padding: 10px 14px;
   background: var(--bg-input);
   border: 1px solid var(--border);
@@ -630,25 +706,12 @@ body {
   min-height: 18px;
 }
 
-/* ── Actions Bar ──────────────────────────────────────────────────────── */
-
-.actions-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 24px;
-  border-bottom: 1px solid var(--border);
-}
-
-.feed-count {
-  font-size: 13px;
+.feed-count-badge {
+  background: rgba(255, 255, 255, 0.05);
   color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.actions-right {
-  display: flex;
-  gap: 8px;
+  border: 1px solid var(--border);
+  min-width: 74px;
+  justify-content: center;
 }
 
 /* ── Feeds List ───────────────────────────────────────────────────────── */
@@ -663,7 +726,7 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 10px;
-  padding-top: 16px;
+  padding-top: 4px;
 }
 
 /* Group headers span the full grid width */

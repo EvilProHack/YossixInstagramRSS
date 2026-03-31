@@ -87,6 +87,14 @@ const store = new Store({
     tunnelName: 'unsocial-tunnel',
     tunnelAutoStart: false,
     feedToken: '',   // When non-empty, all feed-server requests require this token
+    windowState: {
+      width: 960,
+      height: 700,
+      x: null,
+      y: null,
+      isMaximized: true,
+      hasSavedState: false,
+    },
   }
 });
 
@@ -145,6 +153,17 @@ function resolveNotificationsBySubstring(substr) {
 function removeNotificationsBySubstring(substr) {
   for (let i = notificationLog.length - 1; i >= 0; i--) {
     if (notificationLog[i].message.includes(substr)) {
+      notificationLog.splice(i, 1);
+    }
+  }
+  sendNotificationsToRenderer();
+  recalcTrayIcon();
+}
+
+function removeStaleNotificationsForFeed(username) {
+  for (let i = notificationLog.length - 1; i >= 0; i--) {
+    const n = notificationLog[i];
+    if (n.message.includes(`@${username}`) && n.message.includes('stale')) {
       notificationLog.splice(i, 1);
     }
   }
@@ -228,6 +247,9 @@ function checkStaleFeedsNotifications() {
           const hoursAgo = Math.floor(age / (60 * 60 * 1000));
           addNotification('warning', `@${feed.username} feed is stale (last updated ${hoursAgo}h ago)`);
         }
+      } else {
+        // Feed is no longer stale — remove stale-only notifications for it.
+        removeStaleNotificationsForFeed(feed.username);
       }
     }
   } catch (err) {
@@ -345,6 +367,7 @@ async function refreshOldestFeed() {
 
     // Resolve any previous error for this feed
     resolveNotificationsBySubstring(`@${feed.username}`);
+    removeStaleNotificationsForFeed(feed.username);
 
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('feeds-updated');
@@ -540,9 +563,12 @@ app.on('window-all-closed', () => {
 // ── Main Window ────────────────────────────────────────────────────────────
 
 function createMainWindow() {
-  mainWindow = new BrowserWindow({
-    width: 960,
-    height: 700,
+  const savedWindowState = store.get('windowState') || {};
+  const hasValidPosition = Number.isInteger(savedWindowState.x) && Number.isInteger(savedWindowState.y);
+
+  const windowOptions = {
+    width: Number.isInteger(savedWindowState.width) ? savedWindowState.width : 960,
+    height: Number.isInteger(savedWindowState.height) ? savedWindowState.height : 700,
     minWidth: 700,
     minHeight: 500,
     show: false,
@@ -553,24 +579,72 @@ function createMainWindow() {
       contextIsolation: true,
       nodeIntegration: false,
     },
+  };
+
+  if (hasValidPosition) {
+    windowOptions.x = savedWindowState.x;
+    windowOptions.y = savedWindowState.y;
+  }
+
+  mainWindow = new BrowserWindow({
+    ...windowOptions,
   });
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.setMenuBarVisibility(false);
 
+  if (savedWindowState.isMaximized || !savedWindowState.hasSavedState) {
+    mainWindow.maximize();
+  }
+
+  const saveWindowState = () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    const isMaximized = mainWindow.isMaximized();
+    const bounds = isMaximized ? mainWindow.getNormalBounds() : mainWindow.getBounds();
+
+    store.set('windowState', {
+      width: bounds.width,
+      height: bounds.height,
+      x: bounds.x,
+      y: bounds.y,
+      isMaximized,
+      hasSavedState: true,
+    });
+  };
+
+  mainWindow.on('maximize', saveWindowState);
+  mainWindow.on('unmaximize', saveWindowState);
+  mainWindow.on('resize', saveWindowState);
+  mainWindow.on('move', saveWindowState);
+
   // Minimize to tray instead of taskbar
   mainWindow.on('minimize', (e) => {
+    saveWindowState();
     e.preventDefault();
     mainWindow.hide();
   });
 
   // Close button truly quits (default behavior)
   mainWindow.on('close', (e) => {
+    saveWindowState();
     if (!isQuitting) {
       isQuitting = true;
       if (tray) { tray.destroy(); tray = null; }
     }
   });
+}
+
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  const savedWindowState = store.get('windowState') || {};
+  if (savedWindowState.isMaximized) {
+    mainWindow.maximize();
+  }
+
+  mainWindow.show();
+  mainWindow.focus();
 }
 
 // ── System Tray ────────────────────────────────────────────────────────────
@@ -591,7 +665,7 @@ function createTray() {
   updateTrayIcon(false);
 
   const contextMenu = Menu.buildFromTemplate([
-    { label: 'Show', click: () => { mainWindow.show(); mainWindow.focus(); } },
+    { label: 'Show', click: () => showMainWindow() },
     { type: 'separator' },
     { label: 'Quit', click: () => { isQuitting = true; app.quit(); } },
   ]);
@@ -601,8 +675,7 @@ function createTray() {
     if (mainWindow.isVisible()) {
       mainWindow.hide();
     } else {
-      mainWindow.show();
-      mainWindow.focus();
+      showMainWindow();
     }
   });
 
@@ -610,8 +683,7 @@ function createTray() {
     if (mainWindow.isVisible()) {
       mainWindow.hide();
     } else {
-      mainWindow.show();
-      mainWindow.focus();
+      showMainWindow();
     }
   });
 }
@@ -1287,6 +1359,7 @@ ipcMain.handle('refresh-feed', async (_e, username, platform) => {
 
   // Resolve any previous errors for this feed
   resolveNotificationsBySubstring(`@${username}`);
+  removeStaleNotificationsForFeed(username);
 
   const realPostsRefresh = profileData.posts.filter(p => !p.timestampEstimated && p.timestamp);
   const postsWithTsRefresh = realPostsRefresh.length > 0 ? realPostsRefresh : profileData.posts.filter(p => p.timestamp);
@@ -1345,6 +1418,7 @@ ipcMain.handle('refresh-all', async () => {
           : currentFeeds[idx].latestPostDate || null;
         store.set('feeds', currentFeeds);
       }
+      removeStaleNotificationsForFeed(feed.username);
       results.push({ username: feed.username, success: true });
     } catch (err) {
       results.push({ username: feed.username, success: false, error: err.message });
