@@ -1,7 +1,6 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
-const { Feed } = require('feed');
 
 async function scrapeInstagramProfile(username) {
   const profileUrl = `https://www.instagram.com/${username}/`;
@@ -89,7 +88,7 @@ function buildProfileData(username, data) {
     id: p.shortcode,
     shortcode: p.shortcode,
     caption: p.caption || '',
-    timestamp: new Date().toISOString(), // Fallback
+    timestamp: new Date().toISOString(),
     imageUrl: p.imageUrl || '',
     isVideo: p.type === 'reel',
     permalink: `https://www.instagram.com/p/${p.shortcode}/`,
@@ -131,6 +130,26 @@ function findEdges(obj, depth = 0) {
   return [];
 }
 
+function escapeXml(unsafe) {
+  if (!unsafe) return '';
+  return unsafe.replace(/[<>&"']/g, function (c) {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '"': return '&quot;';
+      case "'": return '&apos;';
+    }
+    return c;
+  });
+}
+
+function truncate(str, max) {
+  if (!str) return '';
+  if (str.length <= max) return str;
+  return str.slice(0, max - 1) + '…';
+}
+
 async function run() {
   const username = process.argv[2] || 'yossixworld';
   const baseUrl = process.argv[3] || 'https://yossix-instagram-rss.web.app';
@@ -138,57 +157,52 @@ async function run() {
   try {
     const profileData = await scrapeInstagramProfile(username);
     const siteUrl = `https://www.instagram.com/${username}/`;
-    const feed = new Feed({
-      title: `${profileData.fullName} (@${username})`,
-      description: profileData.biography,
-      id: siteUrl,
-      link: siteUrl,
-      language: 'en',
-      updated: new Date(),
-      feedLinks: {
-        rss: `${baseUrl}/feed/${username}.rss.xml`,
-      },
-    });
+    
+    let xml = `<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>${escapeXml(profileData.fullName)} (@${escapeXml(username)})</title>
+    <link>${escapeXml(siteUrl)}</link>
+    <description>${escapeXml(profileData.biography)}</description>
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+    <language>en</language>
+    <atom:link href="${escapeXml(baseUrl)}/feed/${escapeXml(username)}.rss.xml" rel="self" type="application/rss+xml"/>
+`;
 
     profileData.posts.forEach(post => {
-      const escapedImageUrl = escapeHtml(post.imageUrl);
-      const escapedCaption = escapeHtml(post.caption);
+      const title = truncate(post.caption, 100) || '(no caption)';
+      const description = post.caption || '';
+      const imageUrl = post.imageUrl || '';
+      const permalink = post.permalink;
+      const pubDate = new Date(post.timestamp).toUTCString();
       
-      feed.addItem({
-        title: truncate(post.caption || '(no caption)', 100),
-        id: post.permalink,
-        link: post.permalink,
-        description: escapedCaption,
-        content: `<p><img src="${escapedImageUrl}" /></p><p>${escapedCaption}</p>`,
-        date: new Date(post.timestamp),
-        image: escapedImageUrl,
-      });
+      const escapedImageUrl = escapeXml(imageUrl);
+      const content = `<p><img src="${escapedImageUrl}" /></p><p>${escapeXml(description).replace(/\n/g, '<br/>')}</p>`;
+
+      xml += `    <item>
+      <title><![CDATA[${title}]]></title>
+      <link>${escapeXml(permalink)}</link>
+      <guid>${escapeXml(permalink)}</guid>
+      <pubDate>${pubDate}</pubDate>
+      <description><![CDATA[${description}]]></description>
+      <content:encoded><![CDATA[${content}]]></content:encoded>
+      <enclosure url="${escapedImageUrl}" length="0" type="image/jpeg" />
+    </item>
+`;
     });
+
+    xml += `  </channel>
+</rss>`;
 
     const feedDir = path.join(__dirname, 'public', 'feed');
     if (!fs.existsSync(feedDir)) fs.mkdirSync(feedDir, { recursive: true });
     
-    fs.writeFileSync(path.join(feedDir, `${username}.rss.xml`), feed.rss2());
+    fs.writeFileSync(path.join(feedDir, `${username}.rss.xml`), xml, 'utf8');
     console.log(`Feed generated for @${username}`);
   } catch (err) {
     console.error('Error:', err);
     process.exit(1);
   }
-}
-
-function truncate(str, max) {
-  if (str.length <= max) return str;
-  return str.slice(0, max - 1) + '…';
-}
-
-function escapeHtml(text) {
-  if (!text) return '';
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
 }
 
 run();
