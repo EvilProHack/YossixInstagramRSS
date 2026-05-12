@@ -151,14 +151,17 @@ async function run() {
     });
 
     profileData.posts.forEach(post => {
+      const escapedImageUrl = escapeHtml(post.imageUrl);
+      const escapedCaption = escapeHtml(post.caption);
+      
       feed.addItem({
-        title: post.caption.slice(0, 100) || '(no caption)',
+        title: truncate(post.caption || '(no caption)', 100),
         id: post.permalink,
         link: post.permalink,
-        description: post.caption,
-        content: `<p><img src="${post.imageUrl}" /></p><p>${post.caption}</p>`,
+        description: escapedCaption,
+        content: `<p><img src="${escapedImageUrl}" /></p><p>${escapedCaption}</p>`,
         date: new Date(post.timestamp),
-        image: post.imageUrl,
+        image: escapedImageUrl,
       });
     });
 
@@ -171,6 +174,21 @@ async function run() {
     console.error('Error:', err);
     process.exit(1);
   }
+}
+
+function truncate(str, max) {
+  if (str.length <= max) return str;
+  return str.slice(0, max - 1) + '…';
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 run();
