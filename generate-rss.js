@@ -13,8 +13,9 @@ async function scrapeInstagramProfile(username) {
 
   try {
     console.log(`Navigating to ${profileUrl}...`);
-    await page.goto(profileUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-    await new Promise(r => setTimeout(r, 5000));
+    await page.goto(profileUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+    // Reduced wait time from 5s to 2s
+    await new Promise(r => setTimeout(r, 2000));
 
     const data = await page.evaluate(() => {
       try {
