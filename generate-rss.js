@@ -26,6 +26,7 @@ async function scrapeInstagramProfile(username, options = {}) {
     }
   }
 
+  lastError.code = 'INSTAGRAM_UNAVAILABLE';
   throw lastError;
 }
 
@@ -44,6 +45,18 @@ async function scrapeInstagramOnce(username) {
       '(KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36'
     );
     await page.setExtraHTTPHeaders({ 'accept-language': 'es-ES,es;q=0.9,en;q=0.8' });
+
+    if (process.env.INSTAGRAM_SESSIONID) {
+      await page.setCookie({
+        name: 'sessionid',
+        value: process.env.INSTAGRAM_SESSIONID,
+        domain: '.instagram.com',
+        path: '/',
+        httpOnly: true,
+        secure: true,
+        sameSite: 'None'
+      });
+    }
 
     const responsePromises = [];
     page.on('response', response => {
@@ -442,10 +455,22 @@ async function run(options = {}) {
 }
 
 if (require.main === module) {
-  run().catch(error => {
-    console.error('Error:', error.message);
-    process.exitCode = 1;
-  });
+  run()
+    .then(() => writeGitHubOutput('feed_ready', 'true'))
+    .catch(error => {
+      if (error.code === 'INSTAGRAM_UNAVAILABLE') {
+        console.warn(`No update: ${error.message}. The deployed feed was left untouched.`);
+        writeGitHubOutput('feed_ready', 'false');
+        return;
+      }
+      console.error('Error:', error.message);
+      process.exitCode = 1;
+    });
+}
+
+function writeGitHubOutput(name, value) {
+  if (!process.env.GITHUB_OUTPUT) return;
+  fs.appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`, 'utf8');
 }
 
 module.exports = {

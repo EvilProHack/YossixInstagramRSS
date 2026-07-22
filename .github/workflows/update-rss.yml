@@ -49,15 +49,20 @@ jobs:
         run: npm test
 
       - name: Generate RSS
+        id: generate
+        env:
+          INSTAGRAM_SESSIONID: ${{ secrets.INSTAGRAM_SESSIONID }}
         run: npm run generate:rss
 
       - name: Save last known-good RSS
+        if: steps.generate.outputs.feed_ready == 'true'
         uses: actions/cache/save@v5
         with:
           path: public/feed/yossixworld.rss.xml
           key: rss-state-${{ github.run_id }}
 
       - name: Validate Firebase credential
+        if: steps.generate.outputs.feed_ready == 'true'
         shell: bash
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_YOSSIX_INSTAGRAM_RSS }}
@@ -69,6 +74,7 @@ jobs:
           node -e "JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)"
 
       - name: Deploy to Firebase Hosting
+        if: steps.generate.outputs.feed_ready == 'true'
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_YOSSIX_INSTAGRAM_RSS }}
