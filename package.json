@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/pynbbz/UnSocial"
+    "url": "https://github.com/EvilProHack/YossixInstagramRSS"
   },
   "keywords": [
     "rss",
@@ -22,6 +22,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
+    "test": "node --test",
+    "generate:rss": "node generate-rss.js yossixworld https://yossix-instagram-rss.web.app",
     "build": "npm version patch --no-git-tag-version && electron-builder --win",
     "build:minor": "npm version minor --no-git-tag-version && electron-builder --win",
     "build:major": "npm version major --no-git-tag-version && electron-builder --win",

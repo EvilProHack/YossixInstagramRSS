@@ -1,31 +1,77 @@
 name: Update RSS Feed
+
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    # Offset from the top of the hour, when GitHub Actions is most congested.
+    - cron: '3,13,23,33,43,53 * * * *'
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-instagram-rss
+  cancel-in-progress: true
 
 jobs:
   update-rss:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PREVIOUS_FEED_URL: https://yossix-instagram-rss.web.app/feed/yossixworld.rss.xml
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
-          cache: 'npm'
-      - name: Cache Puppeteer
-        uses: actions/cache@v4
+          node-version: 24
+          cache: npm
+
+      - name: Restore last known-good RSS
+        uses: actions/cache/restore@v5
+        with:
+          path: public/feed/yossixworld.rss.xml
+          key: rss-state-${{ github.run_id }}
+          restore-keys: |
+            rss-state-
+
+      - name: Cache Puppeteer browser
+        uses: actions/cache@v5
         with:
           path: ~/.cache/puppeteer
           key: ${{ runner.os }}-puppeteer-${{ hashFiles('package-lock.json') }}
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Test deduplication safeguards
+        run: npm test
+
       - name: Generate RSS
-        run: node generate-rss.js yossixworld https://yossix-instagram-rss.web.app
+        run: npm run generate:rss
+
+      - name: Save last known-good RSS
+        uses: actions/cache/save@v5
+        with:
+          path: public/feed/yossixworld.rss.xml
+          key: rss-state-${{ github.run_id }}
+
+      - name: Validate Firebase credential
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_YOSSIX_INSTAGRAM_RSS }}
+        run: |
+          if [[ -z "$FIREBASE_SERVICE_ACCOUNT" ]]; then
+            echo "::error::Missing FIREBASE_SERVICE_ACCOUNT_YOSSIX_INSTAGRAM_RSS repository secret"
+            exit 1
+          fi
+          node -e "JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)"
+
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
-          repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_YOSSIX_INSTAGRAM_RSS }}'
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_YOSSIX_INSTAGRAM_RSS }}
           projectId: yossix-instagram-rss
           channelId: live
+          disableComment: true
