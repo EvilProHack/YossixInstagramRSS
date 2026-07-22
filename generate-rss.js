@@ -131,20 +131,25 @@ function buildProfileData(username, data) {
   }
   if (fullName.toLowerCase() === 'instagram') fullName = username;
 
-  const richPosts = extractPostsFromEmbeddedJson(data.embeddedPosts || []);
+  const richPosts = extractPostsFromEmbeddedJson(data.embeddedPosts || [], username);
   const byShortcode = new Map(richPosts.map(post => [post.shortcode, post]));
 
-  for (const domPost of data.domPosts || []) {
-    if (byShortcode.has(domPost.shortcode)) continue;
-    byShortcode.set(domPost.shortcode, {
-      id: domPost.shortcode,
-      shortcode: domPost.shortcode,
-      caption: domPost.caption || '',
-      timestamp: null,
-      imageUrl: domPost.imageUrl || '',
-      isVideo: domPost.type === 'reel',
-      permalink: canonicalPermalink(domPost.shortcode)
-    });
+  // Authenticated profile pages contain recommended posts from other users.
+  // DOM links have no reliable owner metadata, so use them only when Instagram
+  // did not provide any structured profile posts at all.
+  if (richPosts.length === 0) {
+    for (const domPost of data.domPosts || []) {
+      if (byShortcode.has(domPost.shortcode)) continue;
+      byShortcode.set(domPost.shortcode, {
+        id: domPost.shortcode,
+        shortcode: domPost.shortcode,
+        caption: domPost.caption || '',
+        timestamp: null,
+        imageUrl: domPost.imageUrl || '',
+        isVideo: domPost.type === 'reel',
+        permalink: canonicalPermalink(domPost.shortcode)
+      });
+    }
   }
 
   return {
@@ -156,7 +161,7 @@ function buildProfileData(username, data) {
   };
 }
 
-function extractPostsFromEmbeddedJson(jsonBlobs) {
+function extractPostsFromEmbeddedJson(jsonBlobs, expectedUsername = '') {
   const nodes = [];
   for (const blob of jsonBlobs) collectPostNodes(blob, nodes);
 
@@ -165,6 +170,11 @@ function extractPostsFromEmbeddedJson(jsonBlobs) {
   for (const node of nodes) {
     const shortcode = node.shortcode || node.code;
     if (!shortcode || seen.has(shortcode)) continue;
+    const ownerUsername = node.owner?.username || node.user?.username || node.owner_username || '';
+    if (
+      expectedUsername && ownerUsername &&
+      ownerUsername.toLowerCase() !== expectedUsername.toLowerCase()
+    ) continue;
     seen.add(shortcode);
 
     const rawTimestamp = node.taken_at_timestamp || node.taken_at;

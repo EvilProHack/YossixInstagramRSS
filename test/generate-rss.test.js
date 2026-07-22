@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   buildProfileData,
   excludeSuppressedPosts,
+  extractPostsFromEmbeddedJson,
   generateRssXml,
   mergePosts,
   parsePreviousFeed,
@@ -30,6 +31,17 @@ test('DOM fallback does not invent a changing publication date', () => {
 
   assert.equal(profile.posts[0].timestamp, null);
   assert.equal(profile.posts[0].permalink, 'https://www.instagram.com/p/ABC/');
+});
+
+test('authenticated responses exclude recommendations owned by other accounts', () => {
+  const posts = extractPostsFromEmbeddedJson([{
+    items: [
+      { pk: '1', code: 'OWN_POST', taken_at: 1780000000, user: { username: 'yossixworld' } },
+      { pk: '2', code: 'RECOMMENDATION', taken_at: 1780000001, user: { username: 'other_account' } }
+    ]
+  }], 'yossixworld');
+
+  assert.deepEqual(posts.map(post => post.shortcode), ['OWN_POST']);
 });
 
 test('an existing shortcode keeps its immutable date and content', () => {
