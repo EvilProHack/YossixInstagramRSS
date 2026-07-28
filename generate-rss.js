@@ -348,6 +348,18 @@ function mergePosts(scrapedPosts, previousPosts, discoveredAt = new Date().toISO
     merged.push(previous);
   }
 
+  // Instagram keeps pinned posts at the top of the profile even when they are
+  // years older than the latest upload. RSS readers expect reverse
+  // chronological order and some only inspect the first item in each poll.
+  // Keep the feed ordered by the immutable publication date, not profile order.
+  merged.sort((left, right) => {
+    const leftTime = Date.parse(left.timestamp || '');
+    const rightTime = Date.parse(right.timestamp || '');
+    const safeLeftTime = Number.isNaN(leftTime) ? 0 : leftTime;
+    const safeRightTime = Number.isNaN(rightTime) ? 0 : rightTime;
+    return safeRightTime - safeLeftTime;
+  });
+
   return { posts: merged.slice(0, MAX_FEED_ITEMS), newPosts };
 }
 

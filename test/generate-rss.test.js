@@ -68,6 +68,26 @@ test('a temporarily missing post remains in the feed and cannot reappear as new'
   assert.equal(secondRefresh.posts[0].timestamp, oldPost.timestamp);
 });
 
+test('pinned old posts cannot appear before the newest publication', () => {
+  const newestPost = {
+    ...oldPost,
+    shortcode: 'NEWEST_POST',
+    timestamp: '2026-07-28T21:24:42.000Z'
+  };
+  const pinnedOldPost = {
+    ...oldPost,
+    shortcode: 'PINNED_OLD_POST',
+    timestamp: '2025-04-24T15:05:29.000Z'
+  };
+
+  const result = mergePosts([pinnedOldPost, newestPost], []);
+
+  assert.deepEqual(
+    result.posts.map(post => post.shortcode),
+    ['NEWEST_POST', 'PINNED_OLD_POST']
+  );
+});
+
 test('migration baseline suppresses posts that Discord has already announced', () => {
   const visible = excludeSuppressedPosts(
     [oldPost, { ...oldPost, shortcode: 'FUTURE_POST' }],
