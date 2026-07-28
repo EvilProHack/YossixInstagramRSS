@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const MAX_FEED_ITEMS = 50;
+const FEED_FORMAT_VERSION = 2;
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -256,7 +257,9 @@ function tagValue(xml, tag) {
 }
 
 function parsePreviousFeed(xml) {
-  if (!xml || !xml.includes('<rss')) return { posts: [], lastBuildDate: null };
+  if (!xml || !xml.includes('<rss')) {
+    return { posts: [], lastBuildDate: null, formatVersion: null };
+  }
   const posts = [];
   const seen = new Set();
   const itemMatches = xml.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi);
@@ -283,11 +286,15 @@ function parsePreviousFeed(xml) {
     });
   }
 
-  const buildDateText = tagValue(xml.split(/<item\b/i)[0], 'lastBuildDate');
+  const channelHeader = xml.split(/<item\b/i)[0];
+  const buildDateText = tagValue(channelHeader, 'lastBuildDate');
   const buildDate = Date.parse(buildDateText);
+  const generator = tagValue(channelHeader, 'generator');
+  const formatVersionMatch = generator.match(/^YossixInstagramRSS\/(\d+)$/);
   return {
     posts,
-    lastBuildDate: Number.isNaN(buildDate) ? null : new Date(buildDate).toISOString()
+    lastBuildDate: Number.isNaN(buildDate) ? null : new Date(buildDate).toISOString(),
+    formatVersion: formatVersionMatch ? Number(formatVersionMatch[1]) : null
   };
 }
 
@@ -295,11 +302,15 @@ function combinePreviousFeeds(previousFeeds) {
   const posts = [];
   const seen = new Set();
   let lastBuildDate = null;
+  let formatVersion = null;
 
   for (const feed of previousFeeds) {
     if (!feed) continue;
     if (feed.lastBuildDate && (!lastBuildDate || feed.lastBuildDate > lastBuildDate)) {
       lastBuildDate = feed.lastBuildDate;
+    }
+    if (feed.formatVersion && (!formatVersion || feed.formatVersion > formatVersion)) {
+      formatVersion = feed.formatVersion;
     }
     for (const post of feed.posts || []) {
       if (!post.shortcode || seen.has(post.shortcode)) continue;
@@ -307,7 +318,7 @@ function combinePreviousFeeds(previousFeeds) {
       posts.push(post);
     }
   }
-  return { posts, lastBuildDate };
+  return { posts, lastBuildDate, formatVersion };
 }
 
 function mergePosts(scrapedPosts, previousPosts, discoveredAt = new Date().toISOString()) {
@@ -388,6 +399,7 @@ function generateRssXml(profileData, posts, options = {}) {
     <link>${escapeXml(siteUrl)}</link>
     <description>${escapeXml(profileData.biography)}</description>
     <lastBuildDate>${buildDate.toUTCString()}</lastBuildDate>
+    <generator>YossixInstagramRSS/${FEED_FORMAT_VERSION}</generator>
     <language>es</language>
     <ttl>5</ttl>
     <atom:link href="${escapeXml(baseUrl)}/feed/${escapeXml(username)}.rss.xml" rel="self" type="application/rss+xml"/>
@@ -462,7 +474,12 @@ async function run(options = {}) {
   const now = new Date().toISOString();
   const merged = mergePosts(visibleScrapedPosts, visiblePreviousPosts, now);
 
-  const buildDate = merged.newPosts > 0 || !previous.lastBuildDate ? now : previous.lastBuildDate;
+  const buildDate =
+    merged.newPosts > 0 ||
+    !previous.lastBuildDate ||
+    previous.formatVersion !== FEED_FORMAT_VERSION
+      ? now
+      : previous.lastBuildDate;
   const xml = generateRssXml(profileData, merged.posts, { baseUrl, buildDate });
   fs.mkdirSync(feedDir, { recursive: true });
   const temporaryPath = `${outputPath}.tmp`;

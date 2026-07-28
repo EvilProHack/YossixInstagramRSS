@@ -108,6 +108,7 @@ test('RSS round-trip preserves shortcode, GUID and pubDate', () => {
   assert.equal(parsed.posts.length, 1);
   assert.equal(parsed.posts[0].shortcode, oldPost.shortcode);
   assert.equal(parsed.posts[0].timestamp, oldPost.timestamp);
+  assert.equal(parsed.formatVersion, 2);
   assert.match(xml, /<guid isPermaLink="true">https:\/\/www\.instagram\.com\/p\/STABLE_123\/<\/guid>/);
 });
 
